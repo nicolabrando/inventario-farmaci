@@ -73,6 +73,11 @@
                 <p class="text-slate-400 mt-2">Gestione scorte e autonomia terapia</p>
             </div>
             <div class="flex flex-wrap gap-3">
+                <button @click="openModal('info')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white px-3 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
+                    <i data-lucide="help-circle" class="w-4 h-4"></i>
+                    <span class="hidden md:inline text-sm">Guida</span>
+                </button>
+                
                 <button @click="$refs.fileInput.click()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white px-3 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
                     <i data-lucide="upload" class="w-4 h-4"></i>
                     <span class="hidden md:inline text-sm">Importa CSV</span>
@@ -164,28 +169,71 @@
                         </div>
 
                         <!-- Stock Update Field -->
-                        <div v-if="modal.type === 'stock'" class="mb-6">
-                            <label class="block text-sm font-medium text-slate-300 mb-1">Nuovo Totale Dosi (es. dopo l'acquisto o l'inventario)</label>
-                            <p class="text-xs text-slate-400 mb-2">Inserisci quante dosi hai in totale *oggi*. La data di aggiornamento verrà impostata ad oggi.</p>
-                            <input v-model.number="modal.data.stock" type="number" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                        <div v-else-if="modal.type === 'stock'" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-400 mb-1">Nuovo Totale Dosi (es. dopo l'acquisto o l'inventario)</label>
+                            <p class="text-xs text-slate-500 mb-2">Inserisci quante dosi hai in totale *oggi*. La data di aggiornamento verrà impostata ad oggi.</p>
+                            <input type="number" v-model.number="modal.data.stock" min="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         </div>
+                    </div>
+                    
+                    <!-- Modal Content (Info / Guide) -->
+                    <div v-else-if="modal.type === 'info'" class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <div class="mb-4">
+                            <h3 class="font-bold text-white text-base mb-1">📦 Salvataggio e Backup (Import/Export)</h3>
+                            <p>Questa app salva i tuoi dati <b>direttamente nella memoria del tuo telefono o computer</b>. Per non perderli, ti consigliamo di fare regolarmente un backup:</p>
+                            <ul class="list-disc pl-5 mt-2 space-y-1">
+                                <li><b>Esporta CSV:</b> Scarica un file con tutti i tuoi farmaci. Salvalo su iCloud, Google Drive o inviatelo per email.</li>
+                                <li><b>Importa CSV:</b> Se cambi telefono o vuoi ricaricare un backup, usa questo tasto per caricare il file scaricato in precedenza.</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-base mb-1">📱 Come installare l'App sul Telefono</h3>
+                            <p>Per avere l'app sempre a portata di mano e funzionante anche offline:</p>
+                            <div class="mt-2 space-y-3">
+                                <div>
+                                    <p class="font-medium text-blue-400">🍎 iPhone (Safari):</p>
+                                    <ol class="list-decimal pl-5 mt-1 space-y-1">
+                                        <li>Tocca l'icona <b>Condividi</b> (il quadrato con la freccia verso l'alto, in basso al centro).</li>
+                                        <li>Scorri il menu e seleziona <b>"Aggiungi alla schermata Home"</b>.</li>
+                                    </ol>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-emerald-400">🤖 Android (Chrome):</p>
+                                    <ol class="list-decimal pl-5 mt-1 space-y-1">
+                                        <li>Tocca i <b>3 puntini</b> in alto a destra.</li>
+                                        <li>Seleziona <b>"Aggiungi a schermata Home"</b>.</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </div>    
                         
                         <div v-if="modal.type === 'add'" class="mb-6">
                             <label class="block text-sm font-medium text-slate-300 mb-1">Scorta Iniziale</label>
                             <input v-model.number="modal.data.stock" type="number" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
-
-                        <div class="flex gap-3 mt-8">
-                            <button v-if="modal.type === 'edit'" type="button" @click="deleteMed" class="px-4 py-2 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded-lg transition-colors border border-red-900">
+                        
+                        <!-- Modal Actions -->
+                        <div class="mt-8 flex justify-between items-center">
+                            <button v-if="modal.type === 'edit'" type="button" @click="deleteMed" class="text-slate-400 hover:text-red-400 px-4 py-2 border border-slate-700 hover:border-red-500/50 rounded-lg transition-colors">
                                 Elimina
                             </button>
-                            <div class="flex-1"></div>
-                            <button type="button" @click="closeModal" class="px-4 py-2 text-slate-300 hover:text-white">
-                                Annulla
-                            </button>
-                            <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors">
-                                Salva
-                            </button>
+                            <div v-else></div> <!-- Spacer -->
+                            
+                            <div class="flex gap-3">
+                                <button v-if="modal.type === 'info'" type="button" @click="closeModal" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                    Ho capito
+                                </button>
+                                <template v-else>
+                                    <button type="button" @click="closeModal" class="text-slate-400 hover:text-white px-4 py-2 transition-colors">
+                                        Annulla
+                                    </button>
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                        Salva
+                                    </button>
+                                </template>
+                            </div>
                         </div>
                     </form>
                 </div>

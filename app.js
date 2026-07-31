@@ -74,6 +74,7 @@ createApp({
         modalTitle() {
             if (this.modal.type === 'add') return 'Aggiungi Nuovo Farmaco';
             if (this.modal.type === 'edit') return 'Modifica Farmaco';
+            if (this.modal.type === 'info') return 'Guida all\'uso';
             return 'Aggiorna Scorte Totali';
         }
     },
