@@ -1,10 +1,10 @@
 const CACHE_NAME = 'farmaci-cache-v1';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/app.js',
-  '/manifest.json',
-  '/icon.svg',
+  './',
+  './index.html',
+  './app.js',
+  './manifest.json',
+  './icon.svg',
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/vue@3/dist/vue.global.js',
   'https://unpkg.com/lucide@latest',
