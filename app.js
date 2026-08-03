@@ -1,28 +1,50 @@
 const { createApp } = Vue;
 
-// Native Date Utils
-const parseDate = (str) => new Date(str);
-const diffDays = (d1, d2) => Math.floor((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+/* ------------------------------------------------------------------ date --
+ * NB: new Date("2026-07-30") viene interpretata come mezzanotte UTC, mentre
+ * new Date() e' ora locale. Mescolarle sfasa il conteggio dei giorni nelle
+ * ore notturne (in Italia fra mezzanotte e le 02:00). Qui lavoriamo sempre
+ * su mezzanotti locali.
+ * -------------------------------------------------------------------------- */
+function startOfDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+const parseDate = (value) => {
+    if (value instanceof Date) return startOfDay(value);
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? startOfDay(new Date()) : startOfDay(d);
+};
+// Differenza in giorni interi fra due mezzanotti locali (regge l'ora legale)
+const diffDays = (d1, d2) => Math.round(
+    (startOfDay(d1).getTime() - startOfDay(d2).getTime()) / 86400000
+);
 const addDays = (date, days) => {
     const d = new Date(date);
     d.setDate(d.getDate() + days);
     return d;
 };
-const formatDateStr = (date) => {
-    const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
-    return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}`;
-};
-const formatDateForInput = (date) => {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
+const MESI = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+const formatDateStr = (date) =>
+    `${String(date.getDate()).padStart(2, '0')} ${MESI[date.getMonth()]} ${date.getFullYear()}`;
+const formatDateForInput = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-// Generate UUID
-const generateId = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-};
+const generateId = () => (crypto.randomUUID
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    }));
+
+/* --------------------------------------------------------------- storage -- */
+const KEY_MEDS = 'meds_inventory';
+const KEY_EXPORT = 'meds_last_export';
+const KEY_SNOOZE = 'meds_backup_snooze';
+// Ogni quanti giorni ricordare il backup. 7 = una volta a settimana: allineato
+// alla finestra di 7 giorni oltre la quale Safari puo' cancellare i dati locali.
+const BACKUP_EVERY_DAYS = 7;
 
 createApp({
     data() {
@@ -30,29 +52,33 @@ createApp({
             meds: [],
             loading: true,
             error: null,
-            modal: {
-                show: false,
-                type: 'add', // 'add', 'edit', 'stock'
-                data: {}
-            }
-        }
+            today: startOfDay(new Date()),
+            lastExport: null,   // stringa YYYY-MM-DD
+            snoozeUntil: null,  // stringa YYYY-MM-DD
+            modal: { show: false, type: 'add', data: {} }
+        };
     },
     computed: {
         processedMeds() {
-            const today = new Date();
-            
-            return this.meds.map(med => {
+            const today = this.today;
+
+            return this.meds.map((med) => {
+                const posology = Number(med.posology) || 0;
+                const stock = Number(med.stock) || 0;
+                const hasPosology = posology > 0;
+
                 const lastUpdatedDate = parseDate(med.last_updated);
                 const daysPassed = Math.max(0, diffDays(today, lastUpdatedDate));
-                const consumedDoses = daysPassed * med.posology;
-                const estimatedStock = Math.max(0, med.stock - consumedDoses);
-                
-                const daysLeft = med.posology > 0 ? Math.floor(estimatedStock / med.posology) : 999;
-                const runOutDate = addDays(today, daysLeft);
-                
+
+                // Scorta stimata a inizio giornata di oggi
+                const estimatedStock = Math.max(0, stock - daysPassed * posology);
+
+                // Giorni ancora coperti (oggi incluso): la dose di oggi esce da
+                // estimatedStock, quindi il primo giorno scoperto e' oggi + daysLeft.
+                const daysLeft = hasPosology ? Math.floor(estimatedStock / posology) : Infinity;
+
                 let statusColor = 'text-green-400';
                 let bgClass = 'bg-green-500';
-                
                 if (daysLeft <= 7) {
                     statusColor = 'text-red-400';
                     bgClass = 'bg-red-500';
@@ -60,52 +86,79 @@ createApp({
                     statusColor = 'text-amber-400';
                     bgClass = 'bg-amber-500';
                 }
-                
+
                 return {
                     ...med,
                     estimatedStock: parseFloat(estimatedStock.toFixed(1)),
                     daysLeft,
-                    runOutDate,
+                    daysLeftLabel: hasPosology ? `Fra ${daysLeft} giorni` : 'Al bisogno',
+                    runOutLabel: hasPosology ? formatDateStr(addDays(today, daysLeft)) : '—',
+                    barWidth: Math.min(100, (hasPosology ? daysLeft : 60) / 60 * 100),
                     statusColor,
                     bgClass
                 };
             }).sort((a, b) => a.daysLeft - b.daysLeft);
         },
+        daysSinceExport() {
+            if (!this.lastExport) return null;
+            return Math.max(0, diffDays(this.today, parseDate(this.lastExport)));
+        },
+        lastExportLabel() {
+            if (!this.lastExport) return 'mai';
+            const d = this.daysSinceExport;
+            if (d === 0) return 'oggi';
+            if (d === 1) return 'ieri';
+            return `${formatDateStr(parseDate(this.lastExport))} (${d} giorni fa)`;
+        },
+        showBackupReminder() {
+            if (this.loading || this.meds.length === 0) return false;
+            if (this.snoozeUntil && diffDays(this.today, parseDate(this.snoozeUntil)) < 0) return false;
+            const d = this.daysSinceExport;
+            return d === null || d >= BACKUP_EVERY_DAYS;
+        },
+        backupReminderText() {
+            return this.lastExport
+                ? `Ultimo backup ${this.daysSinceExport} giorni fa. I dati stanno solo su questo dispositivo: esportali per non rischiare di perderli.`
+                : "Non hai mai esportato i dati. Stanno solo su questo dispositivo: basta svuotare i dati del browser per perderli.";
+        },
         modalTitle() {
             if (this.modal.type === 'add') return 'Aggiungi Nuovo Farmaco';
             if (this.modal.type === 'edit') return 'Modifica Farmaco';
-            if (this.modal.type === 'info') return 'Guida all\'uso';
+            if (this.modal.type === 'info') return "Guida all'uso";
             return 'Aggiorna Scorte Totali';
         }
     },
     methods: {
-        formatDate(dateStringOrObj) {
-            if (!dateStringOrObj) return '';
-            const d = typeof dateStringOrObj === 'string' ? parseDate(dateStringOrObj) : dateStringOrObj;
-            return formatDateStr(d);
+        formatDate(value) {
+            if (!value) return '';
+            return formatDateStr(parseDate(value));
         },
-        saveToStorage() {
-            localStorage.setItem('meds_inventory', JSON.stringify(this.meds));
-        },
-        async fetchMeds() {
+
+        /* ----------------------------------------------------------- dati -- */
+        loadData() {
             this.loading = true;
             try {
-                const stored = localStorage.getItem('meds_inventory');
-                if (stored) {
-                    this.meds = JSON.parse(stored);
-                } else {
-                    // Initialize empty or from old API if migrating
-                    this.meds = [];
-                }
+                const stored = localStorage.getItem(KEY_MEDS);
+                this.meds = stored ? JSON.parse(stored) : [];
+                if (!Array.isArray(this.meds)) this.meds = [];
+                this.lastExport = localStorage.getItem(KEY_EXPORT);
+                this.snoozeUntil = localStorage.getItem(KEY_SNOOZE);
             } catch (err) {
-                this.error = "Errore nel caricamento dei dati locali.";
+                this.meds = [];
+                this.error = 'Errore nel caricamento dei dati locali: ' + err.message;
             } finally {
                 this.loading = false;
-                this.$nextTick(() => {
-                    lucide.createIcons();
-                });
             }
         },
+        saveToStorage() {
+            try {
+                localStorage.setItem(KEY_MEDS, JSON.stringify(this.meds));
+            } catch (err) {
+                alert('Non e\' stato possibile salvare i dati sul dispositivo: ' + err.message);
+            }
+        },
+
+        /* --------------------------------------------------------- modale -- */
         openModal(type, med = null) {
             this.modal.type = type;
             if (type === 'add') {
@@ -113,50 +166,56 @@ createApp({
             } else if (type === 'edit') {
                 this.modal.data = { ...med };
             } else if (type === 'stock') {
-                const currentMed = this.processedMeds.find(m => m.id === med.id);
-                this.modal.data = { 
-                    id: med.id, 
-                    stock: currentMed.estimatedStock
-                };
+                const current = this.processedMeds.find((m) => m.id === med.id);
+                this.modal.data = { id: med.id, stock: current ? current.estimatedStock : 0 };
+            } else {
+                this.modal.data = {};
             }
             this.modal.show = true;
-            setTimeout(() => lucide.createIcons(), 50);
         },
         closeModal() {
             this.modal.show = false;
         },
-        async submitModal() {
-            try {
-                if (this.modal.type === 'add') {
-                    this.modal.data.last_updated = formatDateForInput(new Date());
-                    this.modal.data.id = generateId();
-                    this.meds.push({...this.modal.data});
-                } else if (this.modal.type === 'edit') {
-                    const idx = this.meds.findIndex(m => m.id === this.modal.data.id);
-                    if (idx !== -1) {
-                        this.meds[idx].name = this.modal.data.name;
-                        this.meds[idx].posology = this.modal.data.posology;
-                    }
-                } else if (this.modal.type === 'stock') {
-                    const idx = this.meds.findIndex(m => m.id === this.modal.data.id);
-                    if (idx !== -1) {
-                        this.meds[idx].stock = this.modal.data.stock;
-                        this.meds[idx].last_updated = formatDateForInput(new Date());
-                    }
+        submitModal() {
+            if (this.modal.type === 'add') {
+                this.meds.push({
+                    id: generateId(),
+                    name: String(this.modal.data.name || '').trim(),
+                    posology: Number(this.modal.data.posology) || 0,
+                    stock: Number(this.modal.data.stock) || 0,
+                    last_updated: formatDateForInput(new Date())
+                });
+            } else if (this.modal.type === 'edit') {
+                const idx = this.meds.findIndex((m) => m.id === this.modal.data.id);
+                if (idx !== -1) {
+                    this.meds[idx].name = String(this.modal.data.name || '').trim();
+                    this.meds[idx].posology = Number(this.modal.data.posology) || 0;
                 }
-                this.saveToStorage();
-                this.closeModal();
-                this.$nextTick(() => lucide.createIcons());
-            } catch (err) {
-                alert(err.message);
+            } else if (this.modal.type === 'stock') {
+                const idx = this.meds.findIndex((m) => m.id === this.modal.data.id);
+                if (idx !== -1) {
+                    this.meds[idx].stock = Number(this.modal.data.stock) || 0;
+                    this.meds[idx].last_updated = formatDateForInput(new Date());
+                }
             }
-        },
-        async deleteMed() {
-            if (!confirm('Sei sicuro di voler rimuovere questo farmaco?')) return;
-            this.meds = this.meds.filter(m => m.id !== this.modal.data.id);
             this.saveToStorage();
             this.closeModal();
         },
+        deleteMed() {
+            if (!confirm('Sei sicuro di voler rimuovere questo farmaco?')) return;
+            this.meds = this.meds.filter((m) => m.id !== this.modal.data.id);
+            this.saveToStorage();
+            this.closeModal();
+        },
+
+        /* ------------------------------------------------------- promemoria */
+        snoozeBackup() {
+            const tomorrow = formatDateForInput(addDays(this.today, 1));
+            this.snoozeUntil = tomorrow;
+            localStorage.setItem(KEY_SNOOZE, tomorrow);
+        },
+
+        /* ----------------------------------------------------- import/export */
         exportCsv() {
             if (this.meds.length === 0) {
                 alert('Nessun dato da esportare');
@@ -165,63 +224,90 @@ createApp({
             const csv = Papa.unparse(this.meds, {
                 columns: ['id', 'name', 'posology', 'stock', 'last_updated']
             });
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
+            const stamp = formatDateForInput(new Date());
+            const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', `inventory_${formatDateForInput(new Date())}.csv`);
-            link.style.visibility = 'hidden';
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `inventario_farmaci_${stamp}.csv`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+            this.lastExport = stamp;
+            localStorage.setItem(KEY_EXPORT, stamp);
+            localStorage.removeItem(KEY_SNOOZE);
+            this.snoozeUntil = null;
         },
         importCsv(event) {
             const file = event.target.files[0];
             if (!file) return;
-            
+            const input = event.target;
+
             Papa.parse(file, {
                 header: true,
-                dynamicTyping: true,
+                dynamicTyping: false,
                 skipEmptyLines: true,
                 complete: (results) => {
-                    if (results.errors.length > 0) {
-                        alert('Errore nella lettura del file CSV');
-                        console.error(results.errors);
+                    input.value = '';
+                    const rows = (results.data || []).filter((r) => r && (r.name || r.id));
+                    if (rows.length === 0) {
+                        alert('Nessun farmaco trovato nel file. Controlla che le colonne siano: id, name, posology, stock, last_updated.');
                         return;
                     }
-                    
-                    const imported = results.data.map(row => ({
-                        id: row.id ? String(row.id) : generateId(),
-                        name: String(row.name || 'Sconosciuto'),
-                        posology: Number(row.posology) || 0,
-                        stock: Number(row.stock) || 0,
-                        last_updated: row.last_updated || formatDateForInput(new Date())
+
+                    const imported = rows.map((row) => ({
+                        id: row.id ? String(row.id).trim() : generateId(),
+                        name: String(row.name || 'Sconosciuto').trim(),
+                        posology: Number(String(row.posology).replace(',', '.')) || 0,
+                        stock: Number(String(row.stock).replace(',', '.')) || 0,
+                        last_updated: /^\d{4}-\d{2}-\d{2}/.test(String(row.last_updated || ''))
+                            ? String(row.last_updated).slice(0, 10)
+                            : formatDateForInput(new Date())
                     }));
-                    
-                    if (confirm(`Trovati ${imported.length} farmaci nel CSV. Vuoi SOSTITUIRE tutto l'inventario attuale con questi dati? (OK per sostituire, Annulla per unire)`)) {
+
+                    const sostituisci = confirm(
+                        `Trovati ${imported.length} farmaci nel file.\n\n` +
+                        'OK = SOSTITUISCI tutto l\'inventario attuale\n' +
+                        'Annulla = UNISCI ai farmaci gia\' presenti'
+                    );
+
+                    if (sostituisci) {
+                        if (this.meds.length > 0 &&
+                            !confirm(`Attenzione: i ${this.meds.length} farmaci attuali verranno cancellati. Procedo?`)) {
+                            return;
+                        }
                         this.meds = imported;
                     } else {
-                        // Merge, avoiding duplicate IDs
-                        const existingIds = new Set(this.meds.map(m => m.id));
+                        const existing = new Set(this.meds.map((m) => m.id));
+                        let aggiunti = 0;
                         for (const m of imported) {
-                            if (!existingIds.has(m.id)) {
-                                this.meds.push(m);
-                                existingIds.add(m.id);
-                            }
+                            if (existing.has(m.id)) m.id = generateId();
+                            this.meds.push(m);
+                            existing.add(m.id);
+                            aggiunti++;
                         }
+                        alert(`${aggiunti} farmaci aggiunti.`);
                     }
-                    
                     this.saveToStorage();
-                    this.$nextTick(() => lucide.createIcons());
-                    
-                    // Reset input
-                    event.target.value = '';
-                    alert('Importazione completata con successo!');
+                },
+                error: (err) => {
+                    input.value = '';
+                    alert('Errore nella lettura del file CSV: ' + err.message);
                 }
             });
         }
     },
     mounted() {
-        this.fetchMeds();
+        this.loadData();
+        // Se l'app resta aperta oltre la mezzanotte, i conteggi si aggiornano da soli
+        setInterval(() => {
+            const now = startOfDay(new Date());
+            if (now.getTime() !== this.today.getTime()) this.today = now;
+        }, 60000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) this.today = startOfDay(new Date());
+        });
     }
 }).mount('#app');

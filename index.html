@@ -2,70 +2,46 @@
 <html lang="it" class="antialiased">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Inventario Farmaci</title>
-    
+
     <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#0f172a">
-    <link rel="icon" type="image/svg+xml" href="./icon.svg">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Farmaci">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+    <!-- iOS ignora le icone del manifest: serve un PNG dedicato -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3b82f6',
-                        danger: '#ef4444',
-                        warning: '#f59e0b',
-                        success: '#10b981',
-                        surface: '#1e293b',
-                        background: '#0f172a'
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- Vue 3 -->
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- PapaParse -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- Librerie: copie locali, l'app funziona anche senza rete -->
+    <link rel="stylesheet" href="./vendor/app.css">
+    <script src="./vendor/vue.global.prod.js"></script>
+    <script src="./vendor/papaparse.min.js"></script>
     <style>
         body {
             background-color: #0f172a;
             color: #f8fafc;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         }
-        
         .glass-panel {
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
-        .progress-bar {
-            transition: width 0.5s ease-out, background-color 0.3s ease;
-        }
-        
-        /* Modals */
-        .modal-enter-active,
-        .modal-leave-active {
-            transition: opacity 0.3s ease;
-        }
-        .modal-enter-from,
-        .modal-leave-to {
-            opacity: 0;
-        }
+        .progress-bar { transition: width 0.5s ease-out, background-color 0.3s ease; }
+        .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
+        .modal-enter-from, .modal-leave-to { opacity: 0; }
+        [v-cloak] { display: none; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
-    <div id="app" class="max-w-6xl mx-auto">
+    <div id="app" v-cloak class="max-w-6xl mx-auto">
+
         <!-- Header -->
-        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
             <div>
                 <h1 class="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
                     Inventario Farmaci
@@ -74,44 +50,67 @@
             </div>
             <div class="flex flex-wrap gap-3">
                 <button @click="openModal('info')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white px-3 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
-                    <i data-lucide="help-circle" class="w-4 h-4"></i>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
                     <span class="hidden md:inline text-sm">Guida</span>
                 </button>
-                
+
                 <button @click="$refs.fileInput.click()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white px-3 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
-                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
                     <span class="hidden md:inline text-sm">Importa CSV</span>
                 </button>
-                <input type="file" ref="fileInput" @change="importCsv" accept=".csv" class="hidden">
-                
+                <input type="file" ref="fileInput" @change="importCsv" accept=".csv,text/csv" class="hidden">
+
                 <button @click="exportCsv" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white px-3 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
-                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                     <span class="hidden md:inline text-sm">Esporta CSV</span>
                 </button>
-                
+
                 <button @click="openModal('add')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-900/50">
-                    <i data-lucide="plus" class="w-5 h-5"></i>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                     <span class="hidden md:inline text-sm">Nuovo Farmaco</span>
                 </button>
             </div>
         </header>
 
-        <!-- Loading State -->
+        <!-- Promemoria backup -->
+        <div v-if="showBackupReminder" class="mb-6 bg-amber-900/30 border border-amber-600/50 text-amber-100 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 shrink-0 text-amber-400"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            <p class="flex-1 text-sm leading-relaxed">{{ backupReminderText }}</p>
+            <div class="flex gap-2 shrink-0">
+                <button @click="exportCsv" class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap">
+                    Esporta ora
+                </button>
+                <button @click="snoozeBackup" class="text-amber-200/80 hover:text-white px-3 py-2 text-sm transition-colors whitespace-nowrap">
+                    Domani
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading -->
         <div v-if="loading" class="flex justify-center items-center h-64">
             <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
 
-        <!-- Error State -->
+        <!-- Errore -->
         <div v-else-if="error" class="bg-red-900/50 border border-red-500 text-red-200 p-4 rounded-lg flex items-center gap-3">
-            <i data-lucide="alert-circle"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 shrink-0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
             {{ error }}
         </div>
 
-        <!-- Compact List -->
+        <!-- Inventario vuoto -->
+        <div v-else-if="meds.length === 0" class="glass-panel rounded-xl p-8 text-center">
+            <h2 class="text-lg font-bold text-white mb-2">Nessun farmaco in elenco</h2>
+            <p class="text-slate-400 text-sm mb-5">Aggiungi il primo farmaco, oppure importa un backup CSV salvato in precedenza.</p>
+            <div class="flex gap-3 justify-center flex-wrap">
+                <button @click="openModal('add')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors">Nuovo Farmaco</button>
+                <button @click="$refs.fileInput.click()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-2 rounded-lg font-medium transition-colors">Importa CSV</button>
+            </div>
+        </div>
+
+        <!-- Elenco -->
         <div v-else class="flex flex-col gap-3">
             <div v-for="med in processedMeds" :key="med.id" class="glass-panel rounded-xl p-4 flex flex-col md:flex-row items-center gap-4 hover:border-slate-600 transition-colors">
-                
-                <!-- Info Section -->
+
                 <div class="flex-1 w-full md:w-auto">
                     <h2 class="text-lg font-bold text-white">{{ med.name }}</h2>
                     <div class="text-xs text-slate-400 mt-1 flex flex-wrap gap-2">
@@ -120,119 +119,113 @@
                     </div>
                 </div>
 
-                <!-- Progress / Days Left -->
                 <div class="flex-[2] w-full md:w-auto px-0 md:px-4 mt-2 md:mt-0">
-                    <div class="flex justify-between text-sm mb-1">
-                        <span class="text-slate-300">Esaurimento: <span class="font-bold text-white">{{ formatDate(med.runOutDate) }}</span></span>
-                        <span class="font-bold" :class="med.statusColor">Fra {{ med.daysLeft }} giorni ({{ med.estimatedStock }} dosi)</span>
+                    <div class="flex justify-between text-sm mb-1 gap-2">
+                        <span class="text-slate-300">Esaurimento: <span class="font-bold text-white">{{ med.runOutLabel }}</span></span>
+                        <span class="font-bold text-right" :class="med.statusColor">{{ med.daysLeftLabel }} ({{ med.estimatedStock }} dosi)</span>
                     </div>
                     <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                        <!-- We use 100 as an arbitrary "max" for the visual bar (e.g. 100 days or doses) -->
-                        <div class="h-2 rounded-full progress-bar" :class="med.bgClass" :style="{ width: Math.min(100, (med.daysLeft / 60) * 100) + '%' }"></div>
+                        <!-- La barra e' piena a 60 giorni di autonomia -->
+                        <div class="h-2 rounded-full progress-bar" :class="med.bgClass" :style="{ width: med.barWidth + '%' }"></div>
                     </div>
                 </div>
 
-                <!-- Actions -->
                 <div class="flex gap-2 w-full md:w-auto mt-3 md:mt-0 justify-end">
                     <button @click="openModal('stock', med)" class="flex-1 md:flex-none bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm transition-colors border border-slate-700 whitespace-nowrap">
                         Aggiorna Scorte
                     </button>
                     <button @click="openModal('edit', med)" class="p-2 text-slate-400 hover:text-white transition-colors rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700" title="Modifica">
-                        <i data-lucide="edit-2" class="w-4 h-4"></i>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- Modal -->
+        <!-- Modale -->
         <transition name="modal">
-            <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                <div class="bg-surface border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl p-6">
+            <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeModal">
+                <div class="bg-surface border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-xl font-bold">{{ modalTitle }}</h3>
                         <button @click="closeModal" class="text-slate-400 hover:text-white">
-                            <i data-lucide="x" class="w-6 h-6"></i>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                         </button>
                     </div>
 
-                    <form @submit.prevent="submitModal">
-                        <!-- Name Field (Only for new/edit) -->
+                    <!-- Guida -->
+                    <div v-if="modal.type === 'info'" class="space-y-5 text-slate-300 text-sm leading-relaxed">
+                        <div>
+                            <h4 class="font-bold text-white text-base mb-1">Salvataggio e backup</h4>
+                            <p>Questa app salva i dati <b>solo nella memoria di questo dispositivo</b>. Non finiscono su nessun server. Per non perderli conviene esportarli ogni settimana:</p>
+                            <ul class="list-disc pl-5 mt-2 space-y-1">
+                                <li><b>Esporta CSV</b>: scarica un file con tutti i farmaci. Salvalo su iCloud, Google Drive o mandatelo per email.</li>
+                                <li><b>Importa CSV</b>: se cambi telefono o svuoti il browser, ricarichi il backup da qui.</li>
+                            </ul>
+                            <p class="mt-3 px-3 py-2 bg-slate-900 rounded-lg border border-slate-700 text-xs">
+                                Ultimo backup: <b class="text-white">{{ lastExportLabel }}</b>
+                            </p>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-white text-base mb-1">Installare l'app sul telefono</h4>
+                            <p>Cosi' resta a portata di mano e funziona anche senza connessione.</p>
+                            <div class="mt-2 space-y-3">
+                                <div>
+                                    <p class="font-medium text-blue-400">iPhone (Safari)</p>
+                                    <ol class="list-decimal pl-5 mt-1 space-y-1">
+                                        <li>Tocca l'icona <b>Condividi</b> (quadrato con freccia in su, in basso al centro).</li>
+                                        <li>Scorri e scegli <b>"Aggiungi alla schermata Home"</b>.</li>
+                                    </ol>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-emerald-400">Android (Chrome)</p>
+                                    <ol class="list-decimal pl-5 mt-1 space-y-1">
+                                        <li>Tocca i <b>3 puntini</b> in alto a destra.</li>
+                                        <li>Scegli <b>"Aggiungi a schermata Home"</b>.</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-white text-base mb-1">Come vengono calcolate le scorte</h4>
+                            <p>Dalla data dell'ultimo inventario l'app sottrae ogni giorno le dosi previste dalla posologia. "Aggiorna Scorte" reimposta il totale a oggi: inserisci le dosi che hai <b>prima</b> di prendere quella odierna.</p>
+                        </div>
+                        <div class="flex justify-end pt-2">
+                            <button type="button" @click="closeModal" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">Ho capito</button>
+                        </div>
+                    </div>
+
+                    <!-- Form add / edit / stock -->
+                    <form v-else @submit.prevent="submitModal">
                         <div v-if="modal.type === 'add' || modal.type === 'edit'" class="mb-4">
                             <label class="block text-sm font-medium text-slate-300 mb-1">Nome Farmaco</label>
                             <input v-model="modal.data.name" type="text" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
 
-                        <!-- Posology Field -->
                         <div v-if="modal.type === 'add' || modal.type === 'edit'" class="mb-4">
                             <label class="block text-sm font-medium text-slate-300 mb-1">Dosi per giorno</label>
-                            <input v-model.number="modal.data.posology" type="number" step="0.5" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <input v-model.number="modal.data.posology" type="number" step="0.5" min="0" inputmode="decimal" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <p class="text-xs text-slate-500 mt-1">Metti 0 se lo prendi solo al bisogno.</p>
                         </div>
 
-                        <!-- Stock Update Field -->
-                        <div v-else-if="modal.type === 'stock'" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-400 mb-1">Nuovo Totale Dosi (es. dopo l'acquisto o l'inventario)</label>
-                            <p class="text-xs text-slate-500 mb-2">Inserisci quante dosi hai in totale *oggi*. La data di aggiornamento verrà impostata ad oggi.</p>
-                            <input type="number" v-model.number="modal.data.stock" min="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                        </div>
-                    </div>
-                    
-                    <!-- Modal Content (Info / Guide) -->
-                    <div v-else-if="modal.type === 'info'" class="space-y-4 text-slate-300 text-sm leading-relaxed">
-                        <div class="mb-4">
-                            <h3 class="font-bold text-white text-base mb-1">📦 Salvataggio e Backup (Import/Export)</h3>
-                            <p>Questa app salva i tuoi dati <b>direttamente nella memoria del tuo telefono o computer</b>. Per non perderli, ti consigliamo di fare regolarmente un backup:</p>
-                            <ul class="list-disc pl-5 mt-2 space-y-1">
-                                <li><b>Esporta CSV:</b> Scarica un file con tutti i tuoi farmaci. Salvalo su iCloud, Google Drive o inviatelo per email.</li>
-                                <li><b>Importa CSV:</b> Se cambi telefono o vuoi ricaricare un backup, usa questo tasto per caricare il file scaricato in precedenza.</li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h3 class="font-bold text-white text-base mb-1">📱 Come installare l'App sul Telefono</h3>
-                            <p>Per avere l'app sempre a portata di mano e funzionante anche offline:</p>
-                            <div class="mt-2 space-y-3">
-                                <div>
-                                    <p class="font-medium text-blue-400">🍎 iPhone (Safari):</p>
-                                    <ol class="list-decimal pl-5 mt-1 space-y-1">
-                                        <li>Tocca l'icona <b>Condividi</b> (il quadrato con la freccia verso l'alto, in basso al centro).</li>
-                                        <li>Scorri il menu e seleziona <b>"Aggiungi alla schermata Home"</b>.</li>
-                                    </ol>
-                                </div>
-                                <div>
-                                    <p class="font-medium text-emerald-400">🤖 Android (Chrome):</p>
-                                    <ol class="list-decimal pl-5 mt-1 space-y-1">
-                                        <li>Tocca i <b>3 puntini</b> in alto a destra.</li>
-                                        <li>Seleziona <b>"Aggiungi a schermata Home"</b>.</li>
-                                    </ol>
-                                </div>
-                            </div>
-                        </div>
-                    </div>    
-                        
-                        <div v-if="modal.type === 'add'" class="mb-6">
+                        <div v-if="modal.type === 'add'" class="mb-4">
                             <label class="block text-sm font-medium text-slate-300 mb-1">Scorta Iniziale</label>
-                            <input v-model.number="modal.data.stock" type="number" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <input v-model.number="modal.data.stock" type="number" min="0" inputmode="numeric" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
-                        
-                        <!-- Modal Actions -->
-                        <div class="mt-8 flex justify-between items-center">
+
+                        <div v-if="modal.type === 'stock'" class="mb-4">
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Nuovo totale dosi</label>
+                            <p class="text-xs text-slate-400 mb-2">Quante dosi hai in totale <b>oggi</b> (es. dopo un acquisto o un conteggio). La data di aggiornamento viene messa a oggi.</p>
+                            <input v-model.number="modal.data.stock" type="number" min="0" inputmode="numeric" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+
+                        <div class="mt-8 flex justify-between items-center gap-3">
                             <button v-if="modal.type === 'edit'" type="button" @click="deleteMed" class="text-slate-400 hover:text-red-400 px-4 py-2 border border-slate-700 hover:border-red-500/50 rounded-lg transition-colors">
                                 Elimina
                             </button>
-                            <div v-else></div> <!-- Spacer -->
-                            
+                            <div v-else></div>
                             <div class="flex gap-3">
-                                <button v-if="modal.type === 'info'" type="button" @click="closeModal" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                                    Ho capito
-                                </button>
-                                <template v-else>
-                                    <button type="button" @click="closeModal" class="text-slate-400 hover:text-white px-4 py-2 transition-colors">
-                                        Annulla
-                                    </button>
-                                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                                        Salva
-                                    </button>
-                                </template>
+                                <button type="button" @click="closeModal" class="text-slate-400 hover:text-white px-4 py-2 transition-colors">Annulla</button>
+                                <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">Salva</button>
                             </div>
                         </div>
                     </form>
@@ -241,15 +234,12 @@
         </transition>
     </div>
 
-    <!-- Scripts -->
     <script src="./app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(registration => {
-                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                }).catch(err => {
-                    console.log('ServiceWorker registration failed: ', err);
+                navigator.serviceWorker.register('./sw.js').catch((err) => {
+                    console.warn('Service worker non registrato:', err);
                 });
             });
         }
