@@ -3,14 +3,6 @@
 App per tenere il conto delle scorte di farmaci e sapere quando finiscono.
 I dati restano **solo sul dispositivo** (localStorage): non vengono inviati da nessuna parte.
 
-## Come pubblicare l'aggiornamento
-
-Sostituisci i file nel repo `nicolabrando/inventario-farmaci` con quelli di questa
-cartella (inclusi `vendor/` e `icons/`) e fai commit sul branch `main`.
-GitHub Pages ripubblica da solo.
-
-I file vecchi `icon.svg` e la vecchia `sw.js` possono essere rimossi.
-
 ## Importante quando modifichi i file
 
 Il service worker serve i file dalla cache. **A ogni modifica cambia
