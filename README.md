@@ -3,6 +3,14 @@
 App per tenere il conto delle scorte di farmaci e sapere quando finiscono.
 I dati restano **solo sul dispositivo** (localStorage): non vengono inviati da nessuna parte.
 
+## Come pubblicare l'aggiornamento
+
+Sostituisci i file nel repo `nicolabrando/inventario-farmaci` con quelli di questa
+cartella (inclusi `vendor/` e `icons/`) e fai commit sul branch `main`.
+GitHub Pages ripubblica da solo.
+
+I file vecchi `icon.svg` e la vecchia `sw.js` possono essere rimossi.
+
 ## Importante quando modifichi i file
 
 Il service worker serve i file dalla cache. **A ogni modifica cambia
@@ -19,6 +27,17 @@ hanno gia' installato l'app continueranno a usare la versione vecchia.
 - `icons/` – icone PNG (180 per iOS, 192/512 per Android, 512 maskable)
 
 Nessuna dipendenza da CDN esterni: l'app funziona anche completamente offline.
+
+## Protezione dei dati
+
+All'avvio l'app chiama `navigator.storage.persist()` per chiedere al browser di
+non cancellare i dati durante le pulizie automatiche. Chrome/Edge decidono da
+soli (nessun prompt) e dicono di si' soprattutto se l'app e' installata in
+schermata Home; Firefox chiede il permesso; Safari implementa l'API ma non
+garantisce di rispettarla. Lo stato corrente si vede nella schermata "Guida".
+
+Non protegge da una cancellazione manuale dei dati del browser: il backup CSV
+resta indispensabile.
 
 ## Backup
 

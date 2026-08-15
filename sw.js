@@ -3,7 +3,7 @@
  * Cambia CACHE_VERSION a ogni modifica dei file: le cache vecchie vengono
  * cancellate automaticamente all'attivazione.
  */
-const CACHE_VERSION = '2026-08-03-1';
+const CACHE_VERSION = '2026-08-03-2';
 const CACHE_NAME = `farmaci-${CACHE_VERSION}`;
 
 const CORE_ASSETS = [

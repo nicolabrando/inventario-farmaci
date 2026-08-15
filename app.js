@@ -55,6 +55,7 @@ createApp({
             today: startOfDay(new Date()),
             lastExport: null,   // stringa YYYY-MM-DD
             snoozeUntil: null,  // stringa YYYY-MM-DD
+            storagePersisted: null, // true = protetto, false = negato, null = non supportato
             modal: { show: false, type: 'add', data: {} }
         };
     },
@@ -121,6 +122,16 @@ createApp({
                 ? `Ultimo backup ${this.daysSinceExport} giorni fa. I dati stanno solo su questo dispositivo: esportali per non rischiare di perderli.`
                 : "Non hai mai esportato i dati. Stanno solo su questo dispositivo: basta svuotare i dati del browser per perderli.";
         },
+        storageLabel() {
+            if (this.storagePersisted === true) return 'attiva';
+            if (this.storagePersisted === false) return 'non concessa dal browser';
+            return 'non supportata da questo browser';
+        },
+        storageLabelClass() {
+            if (this.storagePersisted === true) return 'text-emerald-400';
+            if (this.storagePersisted === false) return 'text-amber-400';
+            return 'text-slate-400';
+        },
         modalTitle() {
             if (this.modal.type === 'add') return 'Aggiungi Nuovo Farmaco';
             if (this.modal.type === 'edit') return 'Modifica Farmaco';
@@ -148,6 +159,29 @@ createApp({
                 this.error = 'Errore nel caricamento dei dati locali: ' + err.message;
             } finally {
                 this.loading = false;
+            }
+        },
+        /* Chiede al browser di NON cancellare automaticamente i dati di questo
+         * sito quando fa pulizia (spazio esaurito, sito non visitato da giorni).
+         * Non esiste un tag HTML per farlo: si passa dalla Storage API.
+         * Chrome/Edge decidono da soli senza chiedere nulla all'utente e dicono
+         * di si' soprattutto se l'app e' installata nella schermata Home.
+         * Firefox mostra una richiesta di permesso.
+         * Safari implementa l'API ma non garantisce di rispettarla: su iPhone
+         * la protezione vera resta l'installazione in schermata Home.
+         * In nessun caso protegge da una cancellazione manuale dei dati del
+         * browser: il backup CSV resta indispensabile. */
+        async requestPersistentStorage() {
+            try {
+                if (!navigator.storage || !navigator.storage.persist) {
+                    this.storagePersisted = null;
+                    return;
+                }
+                let ok = await navigator.storage.persisted();
+                if (!ok) ok = await navigator.storage.persist();
+                this.storagePersisted = ok;
+            } catch (err) {
+                this.storagePersisted = null;
             }
         },
         saveToStorage() {
@@ -301,13 +335,18 @@ createApp({
     },
     mounted() {
         this.loadData();
+        this.requestPersistentStorage();
         // Se l'app resta aperta oltre la mezzanotte, i conteggi si aggiornano da soli
         setInterval(() => {
             const now = startOfDay(new Date());
             if (now.getTime() !== this.today.getTime()) this.today = now;
         }, 60000);
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) this.today = startOfDay(new Date());
+            if (document.hidden) return;
+            this.today = startOfDay(new Date());
+            // Riprova: dopo l'installazione in schermata Home il browser
+            // concede la protezione anche se prima l'aveva negata.
+            if (this.storagePersisted !== true) this.requestPersistentStorage();
         });
     }
 }).mount('#app');
