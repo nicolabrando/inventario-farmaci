@@ -136,7 +136,25 @@ createApp({
             if (this.modal.type === 'add') return 'Aggiungi Nuovo Farmaco';
             if (this.modal.type === 'edit') return 'Modifica Farmaco';
             if (this.modal.type === 'info') return "Guida all'uso";
-            return 'Aggiorna Scorte Totali';
+            return 'Aggiorna Scorte';
+        },
+        /* Anteprima del totale che verra' salvato, ricalcolata mentre scrivi */
+        stockPreview() {
+            if (this.modal.type !== 'stock') return null;
+            const d = this.modal.data;
+            const attuale = Number(d.current) || 0;
+            const quantita = Number(d.amount) || 0;
+            let totale;
+            if (d.mode === 'add') totale = attuale + quantita;
+            else if (d.mode === 'take') totale = attuale - quantita;
+            else totale = Number(d.stock) || 0;
+            const arrotondato = Math.round(totale * 100) / 100;
+            return {
+                attuale: Math.round(attuale * 100) / 100,
+                quantita,
+                totale: Math.max(0, arrotondato),
+                negativo: arrotondato < 0
+            };
         }
     },
     methods: {
@@ -201,7 +219,15 @@ createApp({
                 this.modal.data = { ...med };
             } else if (type === 'stock') {
                 const current = this.processedMeds.find((m) => m.id === med.id);
-                this.modal.data = { id: med.id, stock: current ? current.estimatedStock : 0 };
+                const disponibili = current ? current.estimatedStock : 0;
+                this.modal.data = {
+                    id: med.id,
+                    name: med.name,
+                    mode: 'set',        // 'set' = imposta totale, 'add' = aggiungi, 'take' = prendi
+                    current: disponibili,
+                    stock: disponibili, // usato in modalita' 'set'
+                    amount: 1           // usato in 'add' e 'take'
+                };
             } else {
                 this.modal.data = {};
             }
@@ -228,7 +254,18 @@ createApp({
             } else if (this.modal.type === 'stock') {
                 const idx = this.meds.findIndex((m) => m.id === this.modal.data.id);
                 if (idx !== -1) {
-                    this.meds[idx].stock = Number(this.modal.data.stock) || 0;
+                    const p = this.stockPreview;
+                    if (this.modal.data.mode !== 'set' && p.quantita <= 0) {
+                        alert('Indica una quantita\' maggiore di zero.');
+                        return;
+                    }
+                    if (p.negativo &&
+                        !confirm('Stai togliendo piu\' dosi di quelle disponibili. La scorta verra\' messa a 0. Procedo?')) {
+                        return;
+                    }
+                    // Il totale salvato vale sempre "a partire da oggi": la scorta
+                    // stimata di oggi e' gia' il punto di partenza dei tre calcoli.
+                    this.meds[idx].stock = p.totale;
                     this.meds[idx].last_updated = formatDateForInput(new Date());
                 }
             }

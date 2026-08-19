@@ -196,7 +196,13 @@
                         </div>
                         <div>
                             <h4 class="font-bold text-white text-base mb-1">Come vengono calcolate le scorte</h4>
-                            <p>Dalla data dell'ultimo inventario l'app sottrae ogni giorno le dosi previste dalla posologia. "Aggiorna Scorte" reimposta il totale a oggi: inserisci le dosi che hai <b>prima</b> di prendere quella odierna.</p>
+                            <p>Dalla data dell'ultimo inventario l'app sottrae ogni giorno le dosi previste dalla posologia. Inserisci le dosi che hai <b>prima</b> di prendere quella odierna.</p>
+                            <p class="mt-2">"Aggiorna Scorte" ha tre modalita':</p>
+                            <ul class="list-disc pl-5 mt-1 space-y-1">
+                                <li><b>Conta tutto</b>: hai contato le dosi rimaste e imposti il totale esatto.</li>
+                                <li><b>Aggiungi</b>: hai ritirato una scatola nuova, le dosi si sommano a quelle stimate.</li>
+                                <li><b>Al bisogno</b>: hai preso una dose extra fuori posologia, viene sottratta subito.</li>
+                            </ul>
                         </div>
                         <div class="flex justify-end pt-2">
                             <button type="button" @click="closeModal" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-colors">Ho capito</button>
@@ -222,9 +228,66 @@
                         </div>
 
                         <div v-if="modal.type === 'stock'" class="mb-4">
-                            <label class="block text-sm font-medium text-slate-300 mb-1">Nuovo totale dosi</label>
-                            <p class="text-xs text-slate-400 mb-2">Quante dosi hai in totale <b>oggi</b> (es. dopo un acquisto o un conteggio). La data di aggiornamento viene messa a oggi.</p>
-                            <input v-model.number="modal.data.stock" type="number" min="0" inputmode="numeric" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <p class="text-sm text-slate-400 mb-4">
+                                <b class="text-white">{{ modal.data.name }}</b> — scorta stimata oggi:
+                                <b class="text-white">{{ stockPreview.attuale }} dosi</b>
+                            </p>
+
+                            <!-- Selettore modalita' -->
+                            <div class="grid grid-cols-3 gap-2 mb-4 bg-slate-900 p-1 rounded-lg border border-slate-700">
+                                <button type="button" @click="modal.data.mode = 'set'"
+                                    :class="modal.data.mode === 'set' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'"
+                                    class="px-2 py-2 rounded-md text-xs font-medium transition-colors">
+                                    Conta tutto
+                                </button>
+                                <button type="button" @click="modal.data.mode = 'add'"
+                                    :class="modal.data.mode === 'add' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'"
+                                    class="px-2 py-2 rounded-md text-xs font-medium transition-colors">
+                                    Aggiungi
+                                </button>
+                                <button type="button" @click="modal.data.mode = 'take'"
+                                    :class="modal.data.mode === 'take' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'"
+                                    class="px-2 py-2 rounded-md text-xs font-medium transition-colors">
+                                    Al bisogno
+                                </button>
+                            </div>
+
+                            <!-- Modalita': imposta il totale -->
+                            <div v-if="modal.data.mode === 'set'">
+                                <label class="block text-sm font-medium text-slate-300 mb-1">Nuovo totale dosi</label>
+                                <p class="text-xs text-slate-400 mb-2">Quante dosi hai in totale <b>oggi</b>, contate adesso. Sostituisce il valore precedente.</p>
+                                <input v-model.number="modal.data.stock" type="number" min="0" step="0.5" inputmode="decimal" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+
+                            <!-- Modalita': aggiungi -->
+                            <div v-else-if="modal.data.mode === 'add'">
+                                <label class="block text-sm font-medium text-slate-300 mb-1">Dosi da aggiungere</label>
+                                <p class="text-xs text-slate-400 mb-2">Es. hai ritirato una scatola nuova. Vengono sommate a quelle che hai gia'.</p>
+                                <input v-model.number="modal.data.amount" type="number" min="0" step="0.5" inputmode="decimal" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                            </div>
+
+                            <!-- Modalita': presa al bisogno -->
+                            <div v-else>
+                                <label class="block text-sm font-medium text-slate-300 mb-1">Dosi prese ora</label>
+                                <p class="text-xs text-slate-400 mb-2">Dose presa fuori dalla posologia abituale. Viene sottratta dalle scorte.</p>
+                                <input v-model.number="modal.data.amount" type="number" min="0" step="0.5" inputmode="decimal" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-amber-500 outline-none">
+                                <div class="flex gap-2 mt-2">
+                                    <button v-for="q in [0.5, 1, 2]" :key="q" type="button" @click="modal.data.amount = q"
+                                        class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg py-1.5 text-sm transition-colors">
+                                        {{ q }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Anteprima del risultato -->
+                            <div class="mt-4 px-3 py-2 rounded-lg border text-sm"
+                                 :class="stockPreview.negativo ? 'bg-red-900/30 border-red-700 text-red-200' : 'bg-slate-900 border-slate-700 text-slate-300'">
+                                <span v-if="modal.data.mode === 'set'">Nuovo totale:</span>
+                                <span v-else>{{ stockPreview.attuale }} {{ modal.data.mode === 'add' ? '+' : '−' }} {{ stockPreview.quantita }} =</span>
+                                <b class="text-white">&nbsp;{{ stockPreview.totale }} dosi</b>
+                                <span v-if="stockPreview.negativo" class="block text-xs mt-1">Piu' dosi di quelle disponibili: la scorta verra' messa a 0.</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-2">La data dell'ultimo aggiornamento viene messa a oggi.</p>
                         </div>
 
                         <div class="mt-8 flex justify-between items-center gap-3">
